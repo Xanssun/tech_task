@@ -1,0 +1,30 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Кассовый чек</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            ООО "КОМПАНИЯ К"<br>
+            Добро пожаловать<br>
+            ККМ 00075411 #3969<br>
+            ИНН 1087746942040<br>
+            ЭКЛЗ 3851495566<br>
+            {{ creation_time }}<br>
+            АДМИ<br>
+        </div>
+        {% for item in items %}
+        <div class="item">
+            {{ item.name }}<span>{{ item.quantity }} = {{ item.total_cost }}</span>
+        </div>
+        {% endfor %}
+        <div class="total">ИТОГ {{ total_sum }}</div>
+        <div class="payment-method">НАЛИЧНЫМИ = {{ total_sum }}</div>
+        <div>00003751# 05970</div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,43 @@
+body {
+    font-family: monospace;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f7f7f7;
+}
+
+.container {
+    width: 300px;
+    line-height: 1.5;
+    text-align: center;
+    background-color: #fff;
+    padding: 20px;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.header {
+    font-weight: bold;
+    border-bottom: 1px solid black;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.item {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px dashed black;
+}
+
+.total {
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.payment-method {
+    margin-top: 10px;
+}
