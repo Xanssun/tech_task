@@ -1,9 +1,11 @@
 import os
 from collections import Counter
+from io import BytesIO
 
 import pdfkit
+import qrcode
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -35,7 +37,13 @@ class CashMachineAPIView(APIView):
 
         file_url = self.save_pdf(pdf_file, request)
 
-        return JsonResponse({"message": "PDF file created", "file_url": file_url})
+        print(file_url) # ссылка которая идет в qr
+
+        qr_code_image = self.generate_qr_code(file_url)
+
+        response = HttpResponse(content_type="image/png")
+        response.write(qr_code_image)
+        return response
 
     def get_item_counts(self, item_ids):
         """
@@ -129,3 +137,29 @@ class CashMachineAPIView(APIView):
             f.write(pdf_file)
 
         return request.build_absolute_uri(settings.MEDIA_URL + pdf_name)
+
+    def generate_qr_code(self, file_url):
+        """
+        Генерирует QR-код с URL к PDF-файлу.
+
+        Args:
+            file_url (str): URL к PDF-файлу.
+
+        Returns:
+            bytes: Сгенерированный QR-код в виде байтов.
+        """
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(file_url)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill='black', back_color='white')
+
+
+        qr_image = BytesIO()
+        img.save(qr_image, format='PNG')
+        return qr_image.getvalue()
