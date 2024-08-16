@@ -1,29 +1,70 @@
+import os
 from collections import Counter
 
-from django.http import HttpResponse
+import pdfkit
+from django.conf import settings
+from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Item
 
 
 class CashMachineAPIView(APIView):
-    def post(self, request):
-        item_ids = request.data.get('items', [])
-        item_counts = Counter(item_ids)
+    """
+    APIView для обработки запросов к кассовому аппарату, который генерирует PDF-чеки 
+    на основе списка товаров, переданного в запросе.
+    """
 
+    def post(self, request):
+        """
+        Обрабатывает POST-запрос для генерации PDF-чека.
+
+        Args:
+            request (HttpRequest): Запрос, содержащий список товаров.
+
+        Returns:
+            JsonResponse: Ответ, содержащий сообщение и URL к сгенерированному PDF-файлу.
+        """
+        item_counts = self.get_item_counts(request.data.get('items', []))
+        item_list, total_sum = self.calculate_totals(item_counts)
+
+        context = self.build_context(item_list, total_sum)
+        pdf_file = self.generate_pdf(context)
+
+        file_url = self.save_pdf(pdf_file, request)
+
+        return JsonResponse({"message": "PDF file created", "file_url": file_url})
+
+    def get_item_counts(self, item_ids):
+        """
+        Подсчитывает количество каждого товара в списке.
+
+        Args:
+            item_ids (list): Список идентификаторов товаров.
+
+        Returns:
+            Counter: Счетчик, содержащий количество каждого товара.
+        """
+        return Counter(item_ids)
+
+    def calculate_totals(self, item_counts):
+        """
+        Вычисляет общую сумму и создает список товаров с их количеством и стоимостью.
+
+        Args:
+            item_counts (Counter): Счетчик с количеством каждого товара.
+
+        Returns:
+            tuple: Список товаров с их количеством и стоимостью, общая сумма.
+        """
         total_sum = 0
         item_list = []
 
-        for item_id, quantity in item_counts.items():
-            try:
-                item = Item.objects.get(id=item_id)
-            except Item.DoesNotExist:
-                continue
-
+        items = Item.objects.filter(id__in=item_counts.keys())
+        for item in items:
+            quantity = item_counts[item.id]
             total_cost = item.price * quantity
             total_sum += total_cost
             item_list.append({
@@ -31,28 +72,60 @@ class CashMachineAPIView(APIView):
                 'quantity': quantity,
                 'total_cost': f"{total_cost:.2f}"
             })
-        
-        context = {
+
+        return item_list, total_sum
+
+    def build_context(self, item_list, total_sum):
+        """
+        Создает контекст для рендеринга HTML-шаблона.
+
+        Args:
+            item_list (list): Список товаров с их количеством и стоимостью.
+            total_sum (float): Общая сумма.
+
+        Returns:
+            dict: Контекст, содержащий информацию о товарах, общей сумме и времени создания.
+        """
+        return {
             'items': item_list,
             'total_sum': f"{total_sum:.2f}",
             'creation_time': timezone.now().strftime('%d.%m.%Y %H:%M'),
         }
 
+    def generate_pdf(self, context):
+        """
+        Генерирует PDF из HTML-шаблона с использованием переданного контекста.
+
+        Args:
+            context (dict): Контекст для рендеринга HTML-шаблона.
+
+        Returns:
+            bytes: Сгенерированный PDF-файл в виде байтов.
+        """
         html = render_to_string('index.html', context)
 
-        return HttpResponse(html)
-    
+        options = {
+            'page-size': 'Letter',
+            'encoding': "UTF-8",
+        }
+        
+        return pdfkit.from_string(html, False, options=options)
 
-    def get(self, request):
-        items = Item.objects.all()
+    def save_pdf(self, pdf_file, request):
+        """
+        Сохраняет PDF-файл в файловую систему и возвращает его URL.
 
-        item_data = [
-            {
-                'id': item.id,
-                'name': item.title,
-                'price': item.price,
-            }
-            for item in items
-        ]
+        Args:
+            pdf_file (bytes): Сгенерированный PDF-файл в виде байтов.
+            request (HttpRequest): Текущий запрос для построения абсолютного URL.
 
-        return Response(item_data, status=status.HTTP_200_OK)
+        Returns:
+            str: Абсолютный URL к сохраненному PDF-файлу.
+        """
+        pdf_name = f"check_{timezone.now().strftime('%Y%m%d%H%M%S')}.pdf"
+        path = os.path.join(settings.MEDIA_ROOT, pdf_name)
+        
+        with open(path, "wb") as f:
+            f.write(pdf_file)
+
+        return request.build_absolute_uri(settings.MEDIA_URL + pdf_name)
